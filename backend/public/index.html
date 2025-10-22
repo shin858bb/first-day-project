@@ -1,0 +1,113 @@
+﻿<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Todo App (Express)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP"; padding: 2rem; }
+    .card { border: 1px solid #ddd; padding: 1rem; border-radius: 8px; max-width:700px; }
+    input[type="text"] { width: 70%; padding: .4rem; }
+    button { padding: .4rem .6rem; margin-left: .5rem; }
+    ul { padding-left: 1rem; }
+    li.done { text-decoration: line-through; color: #888; }
+    .controls { margin-top: .5rem; }
+  </style>
+</head>
+<body>
+  <h1>シンプル Todo（Express + in-memory API）</h1>
+  <div class="card">
+    <div>
+      <input id="todoInput" type="text" placeholder="新しい Todo を入力" />
+      <button id="addBtn">追加</button>
+    </div>
+
+    <div class="controls">
+      <button id="refresh">再読み込み</button>
+    </div>
+
+    <h3>Todo 一覧</h3>
+    <ul id="todoList">読み込み中…</ul>
+  </div>
+
+  <script>
+    async function fetchTodos() {
+      const listEl = document.getElementById('todoList');
+      listEl.textContent = '読み込み中…';
+      try {
+        const res = await fetch('/api/todos');
+        const todos = await res.json();
+        if (!Array.isArray(todos)) { listEl.textContent = '取得エラー'; return; }
+        listEl.innerHTML = '';
+        todos.forEach(t => {
+          const li = document.createElement('li');
+          li.dataset.id = t.id;
+          li.className = t.done ? 'done' : '';
+          li.innerHTML = `
+            <span>${escapeHtml(t.text)}</span>
+            &nbsp;
+            <button class="toggleBtn">${t.done ? '未完に戻す' : '完了'}</button>
+            <button class="deleteBtn">削除</button>
+          `;
+          listEl.appendChild(li);
+        });
+      } catch (e) {
+        listEl.textContent = 'エラー';
+      }
+    }
+
+    async function addTodo() {
+      const input = document.getElementById('todoInput');
+      const text = input.value.trim();
+      if (!text) return;
+      try {
+        await fetch('/api/todos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        input.value = '';
+        fetchTodos();
+      } catch (e) {
+        alert('追加に失敗しました');
+      }
+    }
+
+    async function handleClick(e) {
+      const target = e.target;
+      if (target.classList.contains('toggleBtn')) {
+        const li = target.closest('li');
+        const id = li.dataset.id;
+        try {
+          await fetch('/api/todos/' + id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ toggleDone: true })
+          });
+          fetchTodos();
+        } catch (err) { alert('更新失敗'); }
+      } else if (target.classList.contains('deleteBtn')) {
+        const li = target.closest('li');
+        const id = li.dataset.id;
+        if (!confirm('削除しますか？')) return;
+        try {
+          await fetch('/api/todos/' + id, { method: 'DELETE' });
+          fetchTodos();
+        } catch (err) { alert('削除失敗'); }
+      }
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+
+    document.getElementById('addBtn').addEventListener('click', addTodo);
+    document.getElementById('refresh').addEventListener('click', fetchTodos);
+    document.getElementById('todoList').addEventListener('click', handleClick);
+    document.getElementById('todoInput').addEventListener('keydown', e => { if (e.key === 'Enter') addTodo(); });
+
+    // 初回読み込み
+    fetchTodos();
+  </script>
+</body>
+</html>
